@@ -9,40 +9,77 @@ from openpyxl.comments import Comment
 
 OUT = "/home/user/Lagoelette_dasboard/finances/Tableau_Finances_Perso.xlsx"
 F = "Arial"
-NAVY = "1F2A44"; ACCENT = "3B6EF5"; LIGHT = "EEF2FB"; INPUT = "FFF4C2"; WHITE = "FFFFFF"
-GREEN = "1E8E5A"; RED = "C0392B"
-EUR = '#,##0 €;-#,##0 €;"-"'
-EUR2 = '#,##0.00 €;-#,##0.00 €;"-"'
-PCT = '0.0%;-0.0%;"-"'
-thin = Side(style="thin", color="D5DBE8")
-BOX = Border(left=thin, right=thin, top=thin, bottom=thin)
+NAVY = "0F172A"; ACCENT = "6366F1"; LIGHT = "EEF2FF"; INPUT = "FEF9C3"; WHITE = "FFFFFF"
+GREEN = "059669"; RED = "E11D48"; AMBER = "F59E0B"; SKY = "0EA5E9"; SLATE = "64748B"
+PAGE = "F1F5F9"; HEAD = "1E293B"; INK = "1E293B"; BLUE_IN = "1D4ED8"
+EUR = '#,##0 €;-#,##0 €;"–"'
+EUR2 = '#,##0.00 €;-#,##0.00 €;"–"'
+PCT = '0.0%;-0.0%;"–"'
+thin = Side(style="thin", color="E2E8F0")
+BOX = Border(bottom=thin)
 N = 2000  # last journal row
+SHEET_COLOR = {}
 
 def font(**k):
     k.setdefault("name", F); return Font(**k)
 
-def title(ws, text, sub):
-    ws["B2"] = text; ws["B2"].font = font(size=20, bold=True, color=NAVY)
-    ws["B3"] = sub; ws["B3"].font = font(size=10, italic=True, color="6B7280")
+def title(ws, text, sub, last_col="P", color=NAVY):
     ws.sheet_view.showGridLines = False
     ws.column_dimensions["A"].width = 3
+    ws.row_dimensions[1].height = 10
+    ws.row_dimensions[2].height = 40
+    ws.row_dimensions[3].height = 24
+    ws.row_dimensions[4].height = 14
+    for r in (2, 3):
+        for c in range(2, ord(last_col) - 63):
+            ws.cell(row=r, column=c).fill = PatternFill("solid", fgColor=color)
+    ws["B2"] = text; ws["B2"].font = font(size=22, bold=True, color=WHITE)
+    ws["B2"].alignment = Alignment(vertical="center", indent=1)
+    ws["B3"] = sub; ws["B3"].font = font(size=10, color="CBD5E1")
+    ws["B3"].alignment = Alignment(vertical="top", indent=1)
+    SHEET_COLOR[ws.title] = color
 
-def header(ws, row, col, labels, fill=NAVY):
+def header(ws, row, col, labels, fill=HEAD):
     for i, l in enumerate(labels):
         c = ws.cell(row=row, column=col + i, value=l)
         c.font = font(bold=True, color=WHITE, size=10)
         c.fill = PatternFill("solid", fgColor=fill)
         c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        c.border = BOX
-    ws.row_dimensions[row].height = 30
+        c.border = Border()
+    ws.row_dimensions[row].height = 32
+
+def section(ws, ref, text, color=ACCENT):
+    ws[ref] = text; ws[ref].font = font(size=14, bold=True, color=INK)
+    ws[ref].border = Border(bottom=Side(style="medium", color=color))
 
 def cell(ws, ref, value, fmt=None, inp=False, bold=False, color=None, size=10):
     c = ws[ref]; c.value = value
-    c.font = font(bold=bold, size=size, color=color or ("0000FF" if inp else "000000"))
-    if inp: c.fill = PatternFill("solid", fgColor=INPUT)
+    c.font = font(bold=bold, size=size, color=color or (BLUE_IN if inp else INK))
+    c.fill = PatternFill("solid", fgColor=INPUT if inp else WHITE)
     if fmt: c.number_format = fmt
     c.border = BOX
+    c.alignment = Alignment(vertical="center")
     return c
+
+def pie_labels():
+    dl = DataLabelList(); dl.showPercent = True
+    dl.showVal = dl.showCatName = dl.showSerName = dl.showLegendKey = False
+    return dl
+
+def color_points(series, colors):
+    from openpyxl.chart.series import DataPoint
+    for i, colr in enumerate(colors):
+        pt = DataPoint(idx=i); pt.graphicalProperties.solidFill = colr
+        pt.graphicalProperties.line.solidFill = WHITE
+        series.dPt.append(pt)
+
+def soften(chart):
+    from openpyxl.chart.shapes import GraphicalProperties
+    from openpyxl.drawing.line import LineProperties
+    chart.legend.position = "b"
+    if chart.y_axis.majorGridlines is not None:
+        chart.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill="E2E8F0"))
+    chart.x_axis.delete = False; chart.y_axis.delete = False
 
 wb = Workbook()
 dash = wb.active; dash.title = "Dashboard"
@@ -51,7 +88,7 @@ cr = wb.create_sheet("Crédits")
 pl = wb.create_sheet("Placements")
 pa = wb.create_sheet("Paramètres")
 guide = wb.create_sheet("Mode d'emploi")
-for ws, col in [(dash, NAVY), (tx, ACCENT), (cr, "C0392B"), (pl, GREEN), (pa, "6B7280"), (guide, "F2A900")]:
+for ws, col in [(dash, NAVY), (tx, ACCENT), (cr, RED), (pl, GREEN), (pa, SLATE), (guide, AMBER)]:
     ws.sheet_properties.tabColor = col
 
 # ---------------------------------------------------------------- Crédits (inputs needed by Paramètres)
@@ -67,7 +104,7 @@ places = [  # name, type, solde initial, valeur actuelle, rendement, versement m
 ]
 
 # ---------------------------------------------------------------- Paramètres
-title(pa, "Paramètres", "Catégories, types et budgets mensuels — les cases jaunes sont modifiables")
+title(pa, "⚙️  Paramètres", "Catégories, types et budgets mensuels — les cases jaunes sont modifiables", "H", "334155")
 pa["B5"] = "Année suivie"; pa["B5"].font = font(bold=True)
 cell(pa, "C5", 2026, "0", inp=True)
 pa["C5"].comment = Comment("Le Dashboard filtre les transactions sur cette année.", "Finances")
@@ -105,7 +142,7 @@ for _ in range(10):  # spare rows for user categories
     cell(pa, f"B{r}", None, inp=True); cell(pa, f"C{r}", None, inp=True); cell(pa, f"D{r}", None, EUR, inp=True); r += 1
 CAT_LAST = r - 1
 pa[f"B{r+1}"] = "Les catégories crédits / placements viennent automatiquement des onglets Crédits et Placements. Lignes vides en bas : ajoute tes propres catégories."
-pa[f"B{r+1}"].font = font(size=9, italic=True, color="6B7280")
+pa[f"B{r+1}"].font = font(size=9, italic=True, color=SLATE)
 header(pa, 7, 6, ["Types (fixes)"])
 for i, t in enumerate(TYPES):
     cell(pa, f"F{8+i}", t)
@@ -120,7 +157,7 @@ pa.add_data_validation(dv); dv.add(f"C8:C{CAT_LAST}")
 CATS = f"Paramètres!$B$8:$B${CAT_LAST}"; CTYPES = f"Paramètres!$C$8:$C${CAT_LAST}"; CBUD = f"Paramètres!$D$8:$D${CAT_LAST}"
 
 # ---------------------------------------------------------------- Transactions
-title(tx, "Journal des transactions", "Une ligne = une opération. Remplis Date, Catégorie, Description, Montant, Paiement — Type / Mois / Année se calculent seuls.")
+title(tx, "🧾  Journal des transactions", "Une ligne = une opération. Remplis Date, Catégorie, Description, Montant, Paiement — Type / Mois / Année se calculent seuls.", "H", "3730A3")
 header(tx, 4, 1, ["Date", "Catégorie", "Description", "Montant (€)", "Moyen de paiement", "Type (auto)", "Mois (auto)", "Année (auto)"])
 for col, w in zip("ABCDEFGH", [13, 26, 34, 14, 18, 22, 11, 11]):
     tx.column_dimensions[col].width = w
@@ -167,7 +204,7 @@ for i in range(5, N + 1):
     else:
         dte = cat = desc = amt = pay = None
     for col, v, fmt in [("A", dte, "dd/mm/yyyy"), ("B", cat, None), ("C", desc, None), ("D", amt, EUR2), ("E", pay, None)]:
-        c = tx[f"{col}{i}"]; c.value = v; c.font = font(color="0000FF"); c.border = BOX
+        c = tx[f"{col}{i}"]; c.value = v; c.font = font(color=BLUE_IN); c.border = BOX
         if fmt: c.number_format = fmt
     tx[f"F{i}"] = f'=IF(B{i}="","",IFERROR(INDEX({CTYPES},MATCH(B{i},{CATS},0)),"⚠ catégorie inconnue"))'
     tx[f"G{i}"] = f'=IF(A{i}="","",MONTH(A{i}))'
@@ -191,7 +228,7 @@ for t, colr in tcol.items():
 tx.conditional_formatting.add(f"F5:F{N}", FormulaRule(formula=[f'LEFT(F5,1)="⚠"'], font=Font(color=RED, bold=True)))
 
 # ---------------------------------------------------------------- Crédits
-title(cr, "Crédits & remboursements", "Saisis tes prêts (cases jaunes) : mensualité, capital restant, intérêts et date de fin sont calculés.")
+title(cr, "🏦  Crédits & remboursements", "Saisis tes prêts (cases jaunes) : mensualité, capital restant, intérêts et date de fin sont calculés.", "N", "9F1239")
 header(cr, 5, 2, ["Nom du crédit", "Capital emprunté (€)", "Taux annuel", "Durée (mois)", "Date de début",
                   "Mensualité (€)", "Mois écoulés", "Capital restant dû (€)", "Remboursé (journal)",
                   "Coût total intérêts (€)", "Progression", "Date de fin"])
@@ -218,7 +255,7 @@ cr.conditional_formatting.add("L6:L11", DataBarRule(start_type="num", start_valu
 for col, w in zip("BCDEFGHIJKLM", [20, 15, 10, 10, 13, 14, 10, 16, 15, 15, 13, 11]):
     cr.column_dimensions[col].width = w
 # amortisation
-cr["B15"] = "Tableau d'amortissement"; cr["B15"].font = font(size=14, bold=True, color=NAVY)
+section(cr, "B15", "📋  Tableau d'amortissement", RED)
 cr["B16"] = "Crédit à afficher ▸"; cr["B16"].font = font(bold=True)
 cell(cr, "C16", "Crédit auto", inp=True)
 cr.merge_cells("C16:D16")
@@ -231,9 +268,9 @@ cell(cr, "I16", '=IFERROR(INDEX($D$6:$D$11,MATCH($C$16,$B$6:$B$11,0)),0)', '0.00
 cell(cr, "K16", '=IFERROR(INDEX($E$6:$E$11,MATCH($C$16,$B$6:$B$11,0)),0)', "0")
 cell(cr, "M16", '=IFERROR(INDEX($G$6:$G$11,MATCH($C$16,$B$6:$B$11,0)),0)', EUR2)
 cell(cr, "N16", '=IFERROR(INDEX($F$6:$F$11,MATCH($C$16,$B$6:$B$11,0)),0)', "dd/mm/yyyy")
-cr["N15"] = "Début"; cr["N15"].font = font(size=9, color="6B7280")
+cr["N15"] = "Début"; cr["N15"].font = font(size=9, color=SLATE)
 for ref in ("F16", "H16", "J16", "L16"):
-    cr[ref].font = font(bold=True, color="6B7280"); cr[ref].alignment = Alignment(horizontal="right")
+    cr[ref].font = font(bold=True, color=SLATE); cr[ref].alignment = Alignment(horizontal="right")
 header(cr, 18, 2, ["N°", "Échéance", "Mensualité", "Intérêts", "Capital remboursé", "Capital restant", "Statut"])
 for k in range(1, 361):
     rr = 18 + k
@@ -250,10 +287,10 @@ for k in range(1, 361):
         if fmt: c.number_format = fmt
         c.alignment = Alignment(horizontal="center")
 cr.conditional_formatting.add("H19:H378", CellIsRule(operator="equal", formula=['"✔ Payé"'], font=Font(color=GREEN), fill=PatternFill("solid", fgColor="E6F4EA")))
-cr.freeze_panes = "A6"
+cr.freeze_panes = "A6"; cr.column_dimensions["N"].width = 12
 
 # ---------------------------------------------------------------- Placements
-title(pl, "Placements financiers", "Versements tirés du journal • Valeur actuelle à mettre à jour • Projection par intérêts composés")
+title(pl, "📈  Placements financiers", "Versements tirés du journal • Valeur actuelle à mettre à jour • Projection par intérêts composés", "M", "065F46")
 header(pl, 5, 2, ["Placement", "Type", "Solde au 1er janv. (€)", "Versements année (journal)", "Valeur actuelle (€)",
                   "Plus / moins-value (€)", "Performance", "Rendement annuel estimé", "Versement mensuel prévu (€)",
                   "Horizon (années)", "Valeur projetée (€)", "Dont intérêts (€)"])
@@ -288,11 +325,11 @@ for col, w in zip("BCDEFGHIJKLM", [18, 16, 15, 16, 15, 15, 12, 13, 15, 10, 16, 1
 pie = PieChart(); pie.title = "Répartition du patrimoine financier"
 pie.add_data(Reference(pl, min_col=6, min_row=5, max_row=11), titles_from_data=True)
 pie.set_categories(Reference(pl, min_col=2, min_row=6, max_row=11))
-pie.dataLabels = DataLabelList(); pie.dataLabels.showPercent = True
+pie.dataLabels = pie_labels(); color_points(pie.series[0], [SKY, ACCENT, "8B5CF6", AMBER, GREEN, RED]); pie.legend.position = "r"
 pie.height, pie.width = 8, 12
 pl.add_chart(pie, "B15")
 # projection year by year (total)
-pl["J15"] = "Projection du patrimoine (tous placements)"; pl["J15"].font = font(size=12, bold=True, color=NAVY)
+section(pl, "J15", "🔭  Projection du patrimoine", GREEN)
 header(pl, 16, 10, ["Année", "Valeur projetée (€)"])
 for y in range(0, 21):
     rr = 17 + y
@@ -304,13 +341,13 @@ lc.add_data(Reference(pl, min_col=11, min_row=16, max_row=37), titles_from_data=
 lc.set_categories(Reference(pl, min_col=10, min_row=17, max_row=37))
 lc.y_axis.numFmt = '#,##0 €'; lc.height, lc.width = 8, 14
 lc.series[0].graphicalProperties.line.solidFill = GREEN; lc.series[0].graphicalProperties.line.width = 28000
-pl.add_chart(lc, "M16")
+lc.y_axis.delete = False; lc.x_axis.delete = False; pl.add_chart(lc, "M16")
 
 # ---------------------------------------------------------------- Dashboard
-title(dash, "Tableau de bord financier", "Tout se met à jour automatiquement à partir du journal des transactions.")
-dash["B4"] = "Année"; dash["B4"].font = font(bold=True, color="6B7280")
+title(dash, "💰  Tableau de bord financier", "Tout se met à jour automatiquement à partir du journal des transactions.", "P", NAVY)
+dash["B4"] = "Année"; dash["B4"].font = font(bold=True, color=SLATE)
 cell(dash, "C4", "=Paramètres!C5", "0", color="008000", bold=True)
-dash["E4"] = "Mois analysé ▸"; dash["E4"].font = font(bold=True, color="6B7280"); dash["E4"].alignment = Alignment(horizontal="right")
+dash["E4"] = "Mois analysé ▸"; dash["E4"].font = font(bold=True, color=SLATE); dash["E4"].alignment = Alignment(horizontal="right")
 cell(dash, "F4", 11, "0", inp=True, bold=True)
 dash["F4"].comment = Comment("Choisis le mois (1 à 12) pour le bloc Budget vs Réel.", "Finances")
 MOIS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
@@ -320,7 +357,7 @@ dash.add_data_validation(dvmo); dvmo.add("F4")
 
 # monthly matrix
 MR = 16  # header row
-dash[f"B{MR-1}"] = "Synthèse mensuelle"; dash[f"B{MR-1}"].font = font(size=14, bold=True, color=NAVY)
+section(dash, f"B{MR-1}", "📅  Synthèse mensuelle")
 short = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
 header(dash, MR, 2, ["Poste"] + short + ["Total année", "Moy. / mois"])
 SUM = lambda typ, mcol: (f'SUMIFS(Transactions!$D$5:$D${N},Transactions!$F$5:$F${N},{typ},'
@@ -343,8 +380,8 @@ for c in cols + ["O", "P"]:
     cell(dash, f"{c}{R_RES}", f"={c}{R_REV}-{c}{R_SOR}-{c}{R_PLA}", EUR, bold=True)
     cell(dash, f"{c}{R_EPA}", f"={c}{R_PLA}+{c}{R_RES}", EUR, bold=True)
     cell(dash, f"{c}{R_TAU}", f"=IFERROR({c}{R_EPA}/{c}{R_REV},0)", PCT, bold=True)
-for rr, lab, colr in [(R_SOR, "Total dépenses (hors placements)", "FDECEA"), (R_RES, "Reste à vivre (non affecté)", LIGHT),
-                      (R_EPA, "Épargne totale (placé + reste)", "E6F4EA"), (R_TAU, "Taux d'épargne", "E6F4EA")]:
+for rr, lab, colr in [(R_SOR, "Total dépenses (hors placements)", "FFE4E6"), (R_RES, "Reste à vivre (non affecté)", LIGHT),
+                      (R_EPA, "Épargne totale (placé + reste)", "D1FAE5"), (R_TAU, "Taux d'épargne", "D1FAE5")]:
     cell(dash, f"B{rr}", lab, bold=True)
     for c in ["B"] + cols + ["O", "P"]:
         dash[f"{c}{rr}"].fill = PatternFill("solid", fgColor=colr)
@@ -354,42 +391,45 @@ dash.conditional_formatting.add(f"C{R_TAU}:P{R_TAU}", CellIsRule(operator="great
 
 # KPI tiles (rows 6-12)
 kpis = [
-    ("B", "C", "Revenus (année)", f"=O{R_REV}", EUR, GREEN),
-    ("E", "F", "Dépenses (année)", f"=O{R_SOR}", EUR, RED),
-    ("H", "I", "Investi (année)", f"=O{R_PLA}", EUR, ACCENT),
-    ("K", "L", "Taux d'épargne", f"=O{R_TAU}", PCT, GREEN),
-    ("N", "P", "Reste à vivre / mois", f"=P{R_RES}", EUR, NAVY),
+    ("B", "C", "💶  Revenus (année)", f"=O{R_REV}", EUR, GREEN),
+    ("E", "F", "💸  Dépenses (année)", f"=O{R_SOR}", EUR, RED),
+    ("H", "I", "📈  Investi (année)", f"=O{R_PLA}", EUR, ACCENT),
+    ("K", "L", "🐷  Taux d'épargne", f"=O{R_TAU}", PCT, GREEN),
+    ("N", "P", "🧮  Reste à vivre / mois", f"=P{R_RES}", EUR, NAVY),
 ]
 kpis2 = [
-    ("B", "C", "Patrimoine placé", "=Placements!F12", EUR, GREEN),
-    ("E", "F", "Plus-values latentes", "=Placements!G12", EUR, GREEN),
-    ("H", "I", "Capital restant dû", "=Crédits!I12", EUR, RED),
-    ("K", "L", "Patrimoine net", "=Placements!F12-Crédits!I12", EUR, NAVY),
-    ("N", "P", "Mensualités crédits", "=Crédits!G12", EUR, RED),
+    ("B", "C", "🏛️  Patrimoine placé", "=Placements!F12", EUR, GREEN),
+    ("E", "F", "✨  Plus-values latentes", "=Placements!G12", EUR, GREEN),
+    ("H", "I", "🏦  Capital restant dû", "=Crédits!I12", EUR, RED),
+    ("K", "L", "💎  Patrimoine net", "=Placements!F12-Crédits!I12", EUR, NAVY),
+    ("N", "P", "📆  Mensualités crédits", "=Crédits!G12", EUR, RED),
 ]
+dash.row_dimensions[9].height = 12; dash.row_dimensions[13].height = 18
 for row0, group in [(6, kpis), (10, kpis2)]:
     for c1, c2, lab, f, fmt, colr in group:
         dash.merge_cells(f"{c1}{row0}:{c2}{row0}"); dash.merge_cells(f"{c1}{row0+1}:{c2}{row0+2}")
         a = dash[f"{c1}{row0}"]; a.value = lab
-        a.font = font(size=9, bold=True, color="6B7280"); a.alignment = Alignment(horizontal="left", indent=1)
+        a.font = font(size=9, bold=True, color=SLATE); a.alignment = Alignment(horizontal="left", indent=1)
         b = dash[f"{c1}{row0+1}"]; b.value = f; b.number_format = fmt
-        b.font = font(size=18, bold=True, color=colr); b.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        b.font = font(size=20, bold=True, color=colr); b.alignment = Alignment(horizontal="left", vertical="center", indent=1)
         cs = [chr(x) for x in range(ord(c1), ord(c2) + 1)]
         for rr in range(row0, row0 + 3):
             for cc in cs:
-                dash[f"{cc}{rr}"].fill = PatternFill("solid", fgColor=LIGHT)
+                dash[f"{cc}{rr}"].fill = PatternFill("solid", fgColor=WHITE)
         for cc in cs:
             dash[f"{cc}{row0}"].border = Border(top=Side(style="thick", color=colr))
+            dash[f"{cc}{row0+2}"].border = Border(bottom=Side(style="thin", color="CBD5E1"))
+        dash.row_dimensions[row0].height = 22; dash.row_dimensions[row0+1].height = 20; dash.row_dimensions[row0+2].height = 20
 
 # Budget vs réel (selected month)
 BR = R_TAU + 3
-dash[f"B{BR}"] = "Budget vs Réel — mois analysé"; dash[f"B{BR}"].font = font(size=14, bold=True, color=NAVY)
+section(dash, f"B{BR}", "🎯  Budget vs Réel — mois analysé", AMBER)
 header(dash, BR + 1, 2, ["Catégorie", "Budget", "Réel", "Écart", "% utilisé"])
 budget_cats = [n for n, t, b in cats if b]
 for k, name in enumerate(budget_cats):
     rr = BR + 2 + k
-    cell(dash, f"B{rr}", f"=Paramètres!B{CAT_ROWS[name]}", color="008000")
-    cell(dash, f"C{rr}", f"=Paramètres!D{CAT_ROWS[name]}", EUR, color="008000")
+    cell(dash, f"B{rr}", f"=Paramètres!B{CAT_ROWS[name]}")
+    cell(dash, f"C{rr}", f"=Paramètres!D{CAT_ROWS[name]}", EUR)
     cell(dash, f"D{rr}", f'=SUMIFS(Transactions!$D$5:$D${N},Transactions!$B$5:$B${N},B{rr},Transactions!$G$5:$G${N},$F$4,Transactions!$H$5:$H${N},$C$4)', EUR)
     cell(dash, f"E{rr}", f"=C{rr}-D{rr}", EUR)
     cell(dash, f"F{rr}", f"=IFERROR(D{rr}/C{rr},0)", '0%')
@@ -405,7 +445,7 @@ dash.conditional_formatting.add(f"E{BR+2}:E{rr}", CellIsRule(operator="lessThan"
 dash.conditional_formatting.add(f"F{BR+2}:F{rr}", CellIsRule(operator="greaterThan", formula=["1"], font=Font(color=RED, bold=True)))
 dash.conditional_formatting.add(f"F{BR+2}:F{rr}", DataBarRule(start_type="num", start_value=0, end_type="num", end_value=1.5, color="3B6EF5"))
 dash[f"B{rr+1}"] = "Les budgets se modifient dans l'onglet Paramètres. Rouge = dépassement."
-dash[f"B{rr+1}"].font = font(size=9, italic=True, color="6B7280")
+dash[f"B{rr+1}"].font = font(size=9, italic=True, color=SLATE)
 
 # charts
 ch = BarChart(); ch.type = "col"; ch.title = "Revenus vs dépenses vs placements"
@@ -415,21 +455,21 @@ ch.set_categories(Reference(dash, min_col=3, max_col=14, min_row=MR))
 ch.y_axis.numFmt = '#,##0 €'; ch.height, ch.width = 8.5, 17; ch.gapWidth = 60
 for s, colr in zip(ch.series, [GREEN, RED, ACCENT]):
     s.graphicalProperties.solidFill = colr; s.graphicalProperties.line.solidFill = colr
-dash.add_chart(ch, f"H{BR}")
+soften(ch); dash.add_chart(ch, f"H{BR}")
 
 st = BarChart(); st.type = "col"; st.grouping = "stacked"; st.overlap = 100; st.title = "Où part l'argent chaque mois"
 for rrow in (R_LOY, R_DEP, R_ACH, R_CRE):
     st.add_data(Reference(dash, min_col=2, max_col=14, min_row=rrow), from_rows=True, titles_from_data=True)
 st.set_categories(Reference(dash, min_col=3, max_col=14, min_row=MR))
 st.y_axis.numFmt = '#,##0 €'; st.height, st.width = 8.5, 17; st.gapWidth = 60
-for s, colr in zip(st.series, ["1F2A44", "3B6EF5", "F2A900", "C0392B"]):
+for s, colr in zip(st.series, [SLATE, ACCENT, AMBER, RED]):
     s.graphicalProperties.solidFill = colr; s.graphicalProperties.line.solidFill = colr
-dash.add_chart(st, f"H{BR+18}")
+soften(st); dash.add_chart(st, f"H{BR+18}")
 
 pc = PieChart(); pc.title = "Répartition des sorties (année)"
 pc.add_data(Reference(dash, min_col=15, min_row=R_LOY, max_row=R_PLA))
 pc.set_categories(Reference(dash, min_col=2, min_row=R_LOY, max_row=R_PLA))
-pc.dataLabels = DataLabelList(); pc.dataLabels.showPercent = True
+pc.dataLabels = pie_labels(); color_points(pc.series[0], [SLATE, ACCENT, AMBER, RED, GREEN]); pc.legend.position = "r"
 pc.height, pc.width = 8.5, 11
 dash.add_chart(pc, f"B{rr+3}")
 
@@ -437,10 +477,10 @@ dash.column_dimensions["A"].width = 2
 dash.column_dimensions["B"].width = 30
 for c in cols: dash.column_dimensions[c].width = 11
 dash.column_dimensions["O"].width = 13; dash.column_dimensions["P"].width = 12
-dash.freeze_panes = "A5"
+dash.freeze_panes = "A5"; dash.row_dimensions[4].height = 26
 
 # ---------------------------------------------------------------- Mode d'emploi
-title(guide, "Mode d'emploi", "3 minutes pour prendre le fichier en main")
+title(guide, "📘  Mode d'emploi", "3 minutes pour prendre le fichier en main", "C", "B45309")
 steps = [
     ("1. Import Google Sheets", "drive.google.com → Nouveau → Importer un fichier → ouvrir avec Google Sheets (ou Fichier → Importer → Remplacer le classeur)."),
     ("2. Paramètres", "Choisis l'année suivie. Ajuste tes catégories et budgets mensuels (cases jaunes)."),
@@ -461,7 +501,33 @@ for k, (h, t) in enumerate(steps):
     guide.row_dimensions[rr].height = 32
 guide.column_dimensions["B"].width = 26; guide.column_dimensions["C"].width = 110
 
+tx.conditional_formatting.add(f"A5:E{N}", FormulaRule(formula=['AND($A5<>"",MOD(ROW(),2)=0)'], fill=PatternFill("solid", fgColor="F8FAFC")))
+for i in range(5, 400):
+    tx.row_dimensions[i].height = 20
+for i in range(19, 379):
+    cr.row_dimensions[i].height = 18
+for ws in (pa, pl, cr):
+    for i in range(6, 40):
+        if ws.row_dimensions[i].height is None: ws.row_dimensions[i].height = 21
+# dashboard "app" background: every unfilled cell becomes light slate
+for row in dash.iter_rows(min_row=4, max_row=110, min_col=1, max_col=18):
+    for c in row:
+        if c.fill is None or c.fill.fgColor is None or c.fill.fgColor.rgb in ("00000000", None) or c.fill.fill_type is None:
+            c.fill = PatternFill("solid", fgColor=PAGE)
+for r in range(MR + 1, R_TAU + 1):
+    dash.row_dimensions[r].height = 22
+for c in ["B"] + cols + ["O", "P"]:
+    dash[f"{c}{R_REV}"].font = font(bold=True, color=GREEN)
+    dash[f"{c}{R_PLA}"].font = font(color=ACCENT, bold=(c in "OP"))
+    if c != "B": dash[f"{c}{R_TAU}"].alignment = Alignment(horizontal="right", vertical="center")
+for c in ["O", "P"]:
+    for r in range(MR + 1, R_TAU + 1):
+        if dash[f"{c}{r}"].fill.fgColor.rgb in ("00FFFFFF", "FFFFFFFF"):
+            dash[f"{c}{r}"].fill = PatternFill("solid", fgColor=LIGHT)
 for ws in wb.worksheets:
     ws.sheet_view.zoomScale = 90
+    ws.page_setup.orientation = "landscape"
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1; ws.page_setup.fitToHeight = 0
 wb.save(OUT)
 print("ok", len(rows), "rows")
